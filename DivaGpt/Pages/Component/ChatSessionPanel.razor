@@ -1,0 +1,82 @@
+﻿@* ChatGPTとのやり取り1回分を表すコンポーネント *@
+@using DivaGpt.Services
+@using DivaGpt.Dto
+@using Markdig
+@using System.Text.RegularExpressions
+@inject IOpenAiService _openAi
+@inject IChatService _chat
+@inject IChatFormatService _format
+
+@if (Session == null)
+{
+    <div class="spinner-border text-primary">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    return;
+}
+
+<div class="@("row" + (Session.IsDisposed ? " bg-secondary" : ""))">
+    @* Userの入力 *@
+    <div class="d-flex flex-row justify-content-start mb-4 col-11">
+        <img src="/Img/head_right.svg" alt="User" class="chat-icon">
+        <div class="p-3 says mycomment mx-3">
+            <p>@((MarkupString)CodeToHtml(Session.Text).Replace("\r\n", "<br />").Replace("\n", "<br />"))</p>
+        </div>
+    </div>
+    @* ChatGPTからの返事 *@
+    <div class="col-1" />
+    <div class="d-flex flex-row justify-content-end mb-4 col-11">
+        <div class="p-3 says aicomment mx-3">
+            <p>@((MarkupString)CodeToHtml(Session.AiResponse).Replace("\r\n", "<br />").Replace("\n", "<br />"))</p>
+        </div>
+        <img src="/Img/head_left.svg" alt="Com" class="chat-icon">
+    </div>
+</div>
+
+@code {
+    //@bind-Session
+    [Parameter]
+    [EditorRequired]
+    public ChatSession Session { get; set; } = null!;
+
+    /// <summary>
+    /// ストリーミングが終わった時の処理
+    /// </summary>
+    [Parameter]
+    public Action OnStreamFinished { get; set; } = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session == null)throw new ArgumentNullException(nameof(Session));
+        if (Session.StreamingResponse == null) return;
+
+        // ストリーミングで受け取る
+        await foreach (var choice in Session.StreamingResponse.GetChoicesStreaming())
+        {
+            await foreach (var message in choice.GetMessageStreaming())
+            {
+                Session.AiResponse += message.Content;
+                StateHasChanged();
+            }
+        }
+        // 終わったら登録
+        Session.StreamingResponse = null!;
+        _openAi.AddAiChatLog(Session.AiResponse);
+
+        // 終わった時の処理
+        OnStreamFinished?.Invoke();
+
+        await base.OnInitializedAsync();
+    }
+
+    /// <summary>
+    ///ソースコードを見つけてCodeタグをつける
+    /// </summary>
+    /// <param name="input"></param>
+    /// <returns></returns>
+    private string CodeToHtml(string input)
+    {
+        string pattern = @"(?s)```(.*?)```";
+        return Regex.Replace(input, pattern, x => Markdown.ToHtml(x.Groups[0].Value)).ToString();
+    }
+}

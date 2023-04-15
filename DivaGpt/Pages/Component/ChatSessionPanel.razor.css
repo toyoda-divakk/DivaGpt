@@ -1,0 +1,27 @@
+﻿
+/* 吹き出し */
+.says {
+    border-radius: 15px;
+}
+
+    .says p {
+        margin: 0;
+        padding: 0;
+    }
+
+/* 左吹き出し */
+.mycomment {
+    background-color: rgba(215, 242, 251);
+}
+/* 右吹き出し */
+.aicomment {
+    background: rgba(255, 240, 228);
+}
+
+.chat-icon {
+    width: 100px;
+    height: 100px;
+    background: rgb(220, 220, 220);
+    box-shadow: 3px 3px 3px rgb(160, 160, 160);
+    border-radius: 50%;
+}

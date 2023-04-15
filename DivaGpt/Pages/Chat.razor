@@ -1,0 +1,262 @@
+﻿@page "/chat"
+@page "/chat/{pagedata}"
+@implements IDisposable
+@using DivaGpt.Dto;
+@using Toolbelt.Blazor.HotKeys2
+@using Azure.AI.OpenAI;
+@using DivaGpt.Data
+@using DivaGpt.Services
+@using DivaGpt.Pages.Component
+@using Microsoft.Extensions.Options
+@inject IOpenAiService _openAi
+@inject IChatService _chat
+@inject IChatFormatService _format
+@inject IJSRuntime JS
+@inject IOptions<OpenAiOption> _options
+@inject HotKeys HotKeys
+
+@* デバッグモード *@
+<DebugPanel IsVisible="_display != null && _format.IsDebugMode">
+    <Collapse @bind-IsCollapsed="IsCollapsed">
+        @* 現在のチャットログ表示 *@
+        <ChatGptLogPanel Logs="_openAi.ChatLog" />
+        @* プロンプト入力欄 *@
+        <PromptPanel OnClickCallback="ResetPrompt" @bind-Text="ResetPromptText">
+            <h3>プロンプトの入力</h3>
+            <p>チャットログをリセットしてプロンプトを再設定します。<br />@(_options.Value.Separate)で区切ることでUserとAssistantも入力できます。</p>
+        </PromptPanel>
+    </Collapse>
+</DebugPanel>
+
+<PageTitle>@(_display?.Title ?? "Loading")</PageTitle>
+
+@if (!_isLoaded)
+{
+    <div class="spinner-border text-primary">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    return;
+}
+else if (_display == null)
+{
+    <h1>どこにアクセスしとんねん😡</h1>
+    return;
+}
+
+@* 設定項目があるセッションの場合表示 *@
+@if (IsRequiredInputOption)
+{
+    <OptionPanel IsVisible="IsRequiredInputOption" Action="SubmitOption" Options="_display.Options"></OptionPanel>
+    return;
+}
+
+<h1>@_display.Headline</h1>
+<p><em>@((MarkupString)_display.Introduction.Replace("\r\n", "<br />").Replace("\n", "<br />"))</em></p>
+
+@* セッションの表示 *@
+@{
+    // 現在有効なチャットに含まれているか確認する
+    var currentChat = _openAi.ChatLog.Where(x => x.Role == ChatRole.Assistant).Select(x => x.Content).ToList();  // AIの返答のみで判定
+    foreach (var log in backlogs)
+    {
+        if (!log.IsDisposed && log.StreamingResponse == null)
+        {
+            // 破棄判定
+            log.IsDisposed = !currentChat.Contains(log.AiResponse);
+        }
+        //  会話の進行ごとに、繰り返して表示する
+        <ChatSessionPanel Session="log" OnStreamFinished="OnStreamFinished" />
+    }
+}
+
+@* 入力欄 *@
+<InputChatPanel @ref="_inputChatPanel" Error="@_error" IsSubmitted="IsSubmitted" OnClickCallback="SubmitSessionAsync" Placeholder="@_display.Placeholder" SubmitText="@_display.SubmitText"></InputChatPanel>
+
+<div class="my-5"></div>
+
+@code {
+    /// <summary>
+    /// 画面情報のキー
+    /// </summary>
+    [Parameter]
+    public string? Pagedata { get; set; }
+
+    // 入力欄
+    InputChatPanel? _inputChatPanel = null!;    // コンポーネントの独立性を保ちつつホットキー対応させるため、refにする。
+
+    // サーバから取得した画面情報
+    private Display? _display;
+
+    // デバッグモード用
+    public bool IsCollapsed { get; set; } = true;
+
+    // ホットキーの設定
+    HotKeysContext _hotKeysContext = null!;
+
+    // エラーを表示する
+    private string _error = string.Empty;
+
+    // 初期化完了
+    private bool _isLoaded = false;
+
+    // 設定項目がある場合
+    private bool _isSubmittedOptions = false;
+    private bool IsRequiredInputOption { get => _display != null && _display.Options.Count > 0 && !_isSubmittedOptions; }
+
+    private IJSObjectReference? _jsModule = null!;
+
+    /// <summary>今までのセッション</summary>
+    private List<ChatSession> backlogs = new();
+
+    /// <summary>
+    /// JSはここでしか読み込めない
+    /// </summary>
+    /// <param name="firstRender"></param>
+    /// <returns></returns>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_jsModule == null) _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Chat.razor.js");
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected override void OnParametersSet()
+    {
+        // 初期化
+        _isLoaded = false;
+        _display = null;
+        _isSubmittedOptions = false;
+        IsCollapsed = true;
+        backlogs.Clear();
+        base.OnParametersSet();
+        _error = string.Empty;
+
+        // ホットキーの設定
+        // デフォルトでは入力欄にフォーカスしているとキーを効かなく設定しているので、Exclude.Noneで解除する
+        _hotKeysContext = this.HotKeys.CreateContext()
+          .Add(ModCode.Alt, Code.Enter, RequestContinueAsync, "続きを頼む", exclude: Exclude.None)
+          .Add(ModCode.Ctrl | ModCode.Shift, Code.Enter, Back, "1回戻す", exclude: Exclude.None)
+          .Add(ModCode.Shift, Code.Enter, SubmitAsync, "送信", exclude: Exclude.None);
+
+        // パラメータ違いの同じ画面に遷移した場合は、OnInitializedが実行されず、ここが実行されるので注意。
+        if (!string.IsNullOrWhiteSpace(Pagedata) && _format.PageData.TryGetValue(Pagedata, out _display!))
+        {
+            // プロンプトをセット
+            _openAi.InitializeChat(_display);
+        }
+        else
+        {
+            // 指定されたデータが見つからなかった時
+            _display = null;
+        }
+        _isLoaded = true;
+        base.OnParametersSet();
+    }
+
+    /// <summary>
+    /// 設定項目の入力完了
+    /// </summary>
+    private void SubmitOption()
+    {
+        _isSubmittedOptions = true;
+        _openAi.InitializeChat(_display!);
+        StateHasChanged();
+    }
+
+    public string ResetPromptText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 開発用
+    /// プロンプトを入力されたものに差し替えて再スタート
+    /// </summary>
+    private void ResetPrompt(string text)
+    {
+        _openAi.InitializeChat(text);
+        backlogs.Clear();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// 送信ボタンを押したらtrue、ボタンの制御に使用
+    /// 送信しても良い時はfalse
+    /// <summary>
+    public bool IsSubmitted { get; set; } = false;
+
+    /// <summary>
+    /// 入力したテキストを送信する
+    /// 送信ボタンをクリックするとこれが呼ばれる
+    /// </summary>
+    /// <returns></returns>
+    private async Task SubmitSessionAsync(string input)
+    {
+        if (IsSubmitted) return;
+
+        IsSubmitted = true;
+        _error = string.Empty;
+
+        try
+        {
+            // チャット表示を追加
+            var response = await _openAi.GetNextSessionAsync(input);
+            backlogs.Add(new ChatSession { Text = input, StreamingResponse = response });
+            IsSubmitted = false;
+            StateHasChanged();
+
+            // 画面表示を下に。
+            await GotoBottomAsync();
+            // 入力欄のクリア。
+            _inputChatPanel!.SetText(string.Empty);
+        }
+        catch(Exception e)
+        {
+            // 原因不明のエラーの場合
+            IsSubmitted = false;
+            _error = _format.IsDebugMode ? e.Message : "APIへの送信に失敗したのでもう一回送信してください";
+            return;
+        }
+
+    }
+
+    /// <summary>
+    /// 画面表示を一番下までスクロールする
+    /// </summary>
+    /// <returns></returns>
+    public async Task GotoBottomAsync()
+    {
+        if (_jsModule != null)
+        {
+            await _jsModule.InvokeVoidAsync("gotoBottom");
+        }
+    }
+
+    public void Dispose()
+    {
+        this._hotKeysContext.Dispose();
+    }
+
+    /// <summary>送信:Shift+Enter</summary>
+    private async void SubmitAsync()
+    {
+        if (IsSubmitted) return;
+        await _inputChatPanel!.SubmitAsync();
+    }
+    /// <summary>続きを頼む:Alt+Enter</summary>
+    private async void RequestContinueAsync()
+    {
+        if (IsSubmitted) return;
+        await _inputChatPanel!.RequestContinueAsync();
+    }
+    /// <summary>1回戻す:Ctrl+Shift+Enter</summary>
+    private void Back()
+    {
+        if (IsSubmitted) return;
+    }
+
+    /// <summary>
+    /// 各チャット表示でストリーミングが終わった時の処理
+    /// </summary>
+    private async void OnStreamFinished()
+    {
+        await GotoBottomAsync();
+    }
+}
+

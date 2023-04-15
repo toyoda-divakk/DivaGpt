@@ -6,4 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.5" />
+    <PackageReference Include="Markdig" Version="0.31.0" />
+    <PackageReference Include="Toolbelt.Blazor.HotKeys2" Version="1.0.0" />
+  </ItemGroup>
+
 </Project>

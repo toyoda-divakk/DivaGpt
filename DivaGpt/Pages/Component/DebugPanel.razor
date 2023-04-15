@@ -1,0 +1,19 @@
+﻿@* デバッグモード用の描画を行う *@
+
+@if (IsVisible)
+{
+    <div class="border border-danger">
+        <p class="ms-1 mt-1">★debug mode★</p>
+        <div class="ms-3">@ChildContent</div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    [EditorRequired]
+    public bool IsVisible { get; set; } = false;
+
+}

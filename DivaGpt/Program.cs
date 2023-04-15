@@ -1,6 +1,8 @@
 using DivaGpt.Data;
+using DivaGpt.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Toolbelt.Blazor.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +10,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddSingleton<WeatherForecastService>();
+builder.Services.AddTransient<IChatService, ChatService>();
+builder.Services.AddTransient<IChatFormatService, ChatFormatService>();
+builder.Services.AddScoped<IOpenAiService, OpenAiService>();                // Scopedとすることでリロードしたらセッション切れるようにする
+builder.Services.Configure<OpenAiOption>(builder.Configuration.GetSection("OpenAiSettings"));
+builder.Services.Configure<ChatOption>(builder.Configuration.GetSection("ChatSettings"));
+builder.Services.AddHotKeys2(); // キーボードショートカットを入れる
 
 var app = builder.Build();
 

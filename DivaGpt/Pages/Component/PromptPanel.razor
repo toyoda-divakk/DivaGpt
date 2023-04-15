@@ -1,0 +1,19 @@
+﻿@* 
+    デバッグ用プロンプト入力欄
+    説明、文字入力欄、送信ボタンだけのコンポーネント 
+*@
+@inherits InputBase
+<div class="mb-3">
+    @ChildContent
+    <InputTextArea class="form-control mb-3" @oninput="OnInput" @bind-Value="Text" rows="@Rows" />
+    <button class="btn btn-danger" @onclick="OnButtonClickedAsync" disabled="@IsDisableButton">リセット</button>
+</div>
+
+@code {
+    /// <summary>
+    /// 説明文とか表示する
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+}

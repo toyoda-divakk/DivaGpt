@@ -1,0 +1,41 @@
+﻿@*
+    始める前にオプション項目があれば入力してもらうためのパネル
+*@
+@using DivaGpt.Services
+
+@if (IsVisible)
+{
+    <h2>始める前に設定項目を入力します。</h2>
+    @foreach (var option in Options)
+    {
+        <div class="row">
+            <div class="col-12">
+                <h3>@option.Subject</h3>
+                <InputText @bind-Value="option.Value" rows="@option.Rows"></InputText>
+            </div>
+        </div>
+    }
+    // 決定ボタンを押すと、入力フォームの内容をサーバーに送信する（InitializeChatを呼ぶ）。
+    <div class="row">
+        <div class="col-4">
+            <button class="mt-3 btn btn-primary" @onclick="Action">決定</button>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// 表示するか
+    /// </summary>
+    [Parameter]
+    public bool IsVisible { get; set; } = false;
+
+    [Parameter]
+    [EditorRequired]
+    public Action Action { get; set; } = null!;
+
+    /// <summary>ユーザに入力させる項目</summary>
+    [Parameter]
+    [EditorRequired]
+    public List<DisplayOption> Options { get; set; } = new();
+}

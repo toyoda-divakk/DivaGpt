@@ -1,0 +1,26 @@
+﻿@* 折り畳みするだけのコンポーネント *@
+@if (IsCollapsed)
+{
+    <button class="mb-1" @onclick="ToggleAsync">開く</button>
+}
+else
+{
+    <button @onclick="ToggleAsync">閉じる</button>
+    @ChildContent
+}
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public bool IsCollapsed { get; set; } = false;
+    [Parameter]
+    public EventCallback<bool> IsCollapsedChanged { get; set; }
+
+    private async Task ToggleAsync()
+    {
+        IsCollapsed = !IsCollapsed;
+        await IsCollapsedChanged.InvokeAsync(IsCollapsed);
+    }
+}

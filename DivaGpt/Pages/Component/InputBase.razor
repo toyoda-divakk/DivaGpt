@@ -1,0 +1,56 @@
+﻿@* 文字入力欄、送信ボタンだけのコンポーネントのベース *@
+
+@code {
+    /// <summary>
+    /// ボタンクリック時の処理
+    /// 引数に入力内容が送られる
+    /// 
+    /// →Action<string>と一緒だよね多分。
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public EventCallback<string> OnClickCallback { get; set; }
+
+    /// <summary>
+    /// テキスト入力内容
+    /// @bind-Text
+    /// </summary>
+    [Parameter]
+    public string? Text { get; set; }
+    [Parameter]
+    public EventCallback<string> TextChanged { get; set; }
+
+    protected string _text = string.Empty; // OnInputで随時反映する。ボタン活性判定に使う。
+
+    /// <summary>
+    /// 入力している行数
+    /// 最小は3
+    /// </summary>
+    protected int Rows { get; set; } = 3;
+
+    /// <summary>
+    /// ボタン無効
+    /// テキスト未入力ならばボタンを非活性にする。
+    /// </summary>
+    protected bool IsDisableButton => string.IsNullOrWhiteSpace(_text);
+
+    /// <summary>
+    /// 入力ごとに実行
+    /// 入力テキストが空白か判定してボタン活性状態と行数を変える。
+    /// </summary>
+    protected void OnInput(ChangeEventArgs e)
+    {
+        _text = e.Value!.ToString()!;
+        Rows = Math.Max(3, _text.Length - _text.Replace("\n", "").Length + 1);
+    }
+
+    /// <summary>
+    /// ボタンクリック時の処理
+    /// </summary>
+    /// <returns></returns>
+    protected async Task OnButtonClickedAsync()
+    {
+        // 入力内容を引数に実行する
+        await OnClickCallback.InvokeAsync(Text);
+    }
+}
